@@ -1,0 +1,37 @@
+{
+  "name": "cddp-workbench",
+  "version": "0.1.0",
+  "description": "CDDP-workbench — 配置驱动开发平台-工作台",
+  "author": "cxyagua",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.1",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "axios": "^1.17.0",
+    "element-plus": "^2.14.2",
+    "lodash-es": "^4.17.21",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.6.4",
+    "vue3-ts-jsoneditor": "^3.4.1"
+  },
+  "devDependencies": {
+    "@types/lodash-es": "^4.17.12",
+    "@types/mockjs": "^1.0.10",
+    "@types/node": "^25.9.1",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "@vue/tsconfig": "^0.7.0",
+    "less": "^4.2.0",
+    "mockjs": "^1.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-mock": "^3.0.2",
+    "vue-tsc": "^2.2.8"
+  }
+}
