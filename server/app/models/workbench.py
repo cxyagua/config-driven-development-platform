@@ -24,6 +24,9 @@ class Node(Base):
     config_id = Column(String(100), comment="配置唯一标识")
     component_type = Column(String(50), default="others", comment="组件类型")
     created_by = Column(String(100), comment="创建人")
+    deleted = Column(Boolean, default=False, comment="是否已删除")
+    deleted_at = Column(DateTime, comment="删除时间")
+    deleted_by = Column(String(100), comment="删除人")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
@@ -33,5 +36,6 @@ class ConfigStore(Base):
 
     config_id = Column(String(100), primary_key=True, comment="配置唯一标识")
     content = Column(JSON, nullable=False, comment="配置内容")
+    deleted = Column(Boolean, default=False, comment="是否已删除")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")

@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import select, delete, update, and_, or_
+from sqlalchemy import select, delete, update, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.workbench import Space, Node, ConfigStore
 from app.schemas.workbench import Node as NodeSchema
@@ -78,7 +78,7 @@ async def get_nodes(db: AsyncSession, space_id: str) -> Tuple[Optional[List[Node
     if result.scalar_one_or_none() is None:
         return None, f'空间 "{space_id}" 不存在'
 
-    result = await db.execute(select(Node).where(Node.space_id == space_id).order_by(Node.id))
+    result = await db.execute(select(Node).where(and_(Node.space_id == space_id, Node.deleted == False)).order_by(Node.id))
     nodes = result.scalars().all()
     return [node_to_schema(n) for n in nodes], None
 
@@ -87,7 +87,7 @@ async def collect_descendant_folder_ids(db: AsyncSession, space_id: str, root_id
     ids: List[int] = [root_id]
     result = await db.execute(
         select(Node.id).where(
-            and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == root_id)
+            and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == root_id, Node.deleted == False)
         )
     )
     children = result.scalars().all()
@@ -98,7 +98,7 @@ async def collect_descendant_folder_ids(db: AsyncSession, space_id: str, root_id
 
 async def find_space_id_by_config_id(db: AsyncSession, config_id: str) -> Optional[str]:
     result = await db.execute(
-        select(Node.space_id).where(and_(Node.node_type == 'config', Node.config_id == config_id))
+        select(Node.space_id).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False))
     )
     return result.scalar_one_or_none()
 
@@ -116,7 +116,7 @@ async def create_folder(db: AsyncSession, space_id: str, name: str, parent_id: i
 
     result = await db.execute(
         select(Node).where(
-            and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == parent_id, Node.name == name)
+            and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == parent_id, Node.name == name, Node.deleted == False)
         )
     )
     if result.scalar_one_or_none() is not None:
@@ -148,7 +148,7 @@ async def rename_folder(db: AsyncSession, space_id: str, folder_id: int, new_nam
         return None, 'id 和 newName 不能为空'
 
     result = await db.execute(
-        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id))
+        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id, Node.deleted == False))
     )
     folder = result.scalar_one_or_none()
     if not folder:
@@ -173,7 +173,7 @@ async def delete_folder(db: AsyncSession, space_id: str, folder_id: int) -> Tupl
         return None, 'id 不能为空'
 
     result = await db.execute(
-        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id))
+        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id, Node.deleted == False))
     )
     folder = result.scalar_one_or_none()
     if not folder:
@@ -183,20 +183,20 @@ async def delete_folder(db: AsyncSession, space_id: str, folder_id: int) -> Tupl
 
     result = await db.execute(
         select(Node.config_id).where(
-            and_(Node.space_id == space_id, Node.node_type == 'config', Node.parent_id.in_(folder_ids))
+            and_(Node.space_id == space_id, Node.node_type == 'config', Node.parent_id.in_(folder_ids), Node.deleted == False)
         )
     )
     config_ids = result.scalars().all()
     for config_id in config_ids:
-        await db.execute(delete(ConfigStore).where(ConfigStore.config_id == config_id))
+        await db.execute(update(ConfigStore).where(ConfigStore.config_id == config_id).values(deleted=True))
 
     await db.execute(
-        delete(Node).where(
+        update(Node).where(
             and_(Node.space_id == space_id, or_(
                 and_(Node.node_type == 'folder', Node.id.in_(folder_ids)),
                 and_(Node.node_type == 'config', Node.parent_id.in_(folder_ids))
             ))
-        )
+        ).values(deleted=True, deleted_at=func.now(), deleted_by=settings.DEFAULT_USER_ID)
     )
     await db.commit()
 
@@ -216,7 +216,7 @@ async def move_folder(db: AsyncSession, space_id: str, source_id: int, target_pa
         return None, 'sourceId 不能为空'
 
     result = await db.execute(
-        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == source_id))
+        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == source_id, Node.deleted == False))
     )
     folder = result.scalar_one_or_none()
     if not folder:
@@ -244,7 +244,7 @@ async def create_config(db: AsyncSession, space_id: str, config_id: str, name: s
     if not config_id or not name:
         return None, 'configId 和 name 不能为空'
 
-    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
+    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False)))
     if result.scalar_one_or_none() is not None:
         return None, f'配置 ID "{config_id}" 已存在'
 
@@ -281,7 +281,7 @@ async def rename_config(db: AsyncSession, config_id: str, new_name: str) -> Tupl
     if owner_space and await is_space_readonly(db, owner_space):
         return None, '只读空间，禁止操作'
 
-    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
+    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False)))
     config = result.scalar_one_or_none()
     if not config:
         return None, f'配置 "{config_id}" 不存在'
@@ -304,15 +304,15 @@ async def delete_config(db: AsyncSession, config_id: str) -> Tuple[Optional[List
     if owner_space and await is_space_readonly(db, owner_space):
         return None, '只读空间，禁止操作'
 
-    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
+    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False)))
     config = result.scalar_one_or_none()
     if not config:
         return None, f'配置 "{config_id}" 不存在'
 
     space_id = config.space_id
 
-    await db.execute(delete(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
-    await db.execute(delete(ConfigStore).where(ConfigStore.config_id == config_id))
+    await db.execute(update(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)).values(deleted=True, deleted_at=func.now(), deleted_by=settings.DEFAULT_USER_ID))
+    await db.execute(update(ConfigStore).where(ConfigStore.config_id == config_id).values(deleted=True))
     await db.commit()
 
     nodes, _ = await get_nodes(db, space_id)
@@ -327,7 +327,7 @@ async def move_config(db: AsyncSession, config_id: str, target_folder_id: int) -
     if owner_space and await is_space_readonly(db, owner_space):
         return None, '只读空间，禁止操作'
 
-    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
+    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False)))
     config = result.scalar_one_or_none()
     if not config:
         return None, f'配置 "{config_id}" 不存在'
@@ -340,7 +340,7 @@ async def move_config(db: AsyncSession, config_id: str, target_folder_id: int) -
 
 
 async def get_config_content(db: AsyncSession, config_id: str) -> Tuple[Optional[Any], Optional[str]]:
-    result = await db.execute(select(ConfigStore).where(ConfigStore.config_id == config_id))
+    result = await db.execute(select(ConfigStore).where(and_(ConfigStore.config_id == config_id, ConfigStore.deleted == False)))
     stored = result.scalar_one_or_none()
     if not stored:
         return None, f'配置 "{config_id}" 不存在'
@@ -348,7 +348,7 @@ async def get_config_content(db: AsyncSession, config_id: str) -> Tuple[Optional
 
 
 async def save_config_content(db: AsyncSession, config_id: str, content: Any) -> Tuple[bool, Optional[str]]:
-    result = await db.execute(select(ConfigStore).where(ConfigStore.config_id == config_id))
+    result = await db.execute(select(ConfigStore).where(and_(ConfigStore.config_id == config_id, ConfigStore.deleted == False)))
     stored = result.scalar_one_or_none()
     if not stored:
         return False, f'配置 "{config_id}" 不存在'
@@ -370,7 +370,7 @@ async def update_config_type(db: AsyncSession, config_id: str, component_type: s
     if owner_space and await is_space_readonly(db, owner_space):
         return None, '只读空间，禁止操作'
 
-    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id)))
+    result = await db.execute(select(Node).where(and_(Node.node_type == 'config', Node.config_id == config_id, Node.deleted == False)))
     config = result.scalar_one_or_none()
     if not config:
         return None, f'配置 "{config_id}" 不存在'
@@ -387,7 +387,7 @@ async def ensure_folder_path(db: AsyncSession, space_id: str, folder_path: List[
     for folder_name in folder_path:
         result = await db.execute(
             select(Node).where(
-                and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == parent_id, Node.name == folder_name)
+                and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == parent_id, Node.name == folder_name, Node.deleted == False)
             )
         )
         existing = result.scalar_one_or_none()
@@ -407,7 +407,7 @@ async def build_folder_path(db: AsyncSession, space_id: str, folder_id: int) -> 
     current_id: Optional[int] = folder_id
     while current_id and current_id != 0:
         result = await db.execute(
-            select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == current_id))
+            select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == current_id, Node.deleted == False))
         )
         folder = result.scalar_one_or_none()
         if not folder:
@@ -420,7 +420,7 @@ async def build_folder_path(db: AsyncSession, space_id: str, folder_id: int) -> 
 async def collect_folder_tree(db: AsyncSession, space_id: str, root_folder_id: int, path_prefix: List[str]) -> List[Dict[str, Any]]:
     result: List[Dict[str, Any]] = [{'id': root_folder_id, 'path': path_prefix}]
     result_children = await db.execute(
-        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == root_folder_id))
+        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.parent_id == root_folder_id, Node.deleted == False))
     )
     children = result_children.scalars().all()
     for child in children:
@@ -443,7 +443,7 @@ async def sync_folder(db: AsyncSession, space_id: str, folder_id: int, target_sp
         return False, f'目标空间 "{target_space_id}" 不存在'
 
     result = await db.execute(
-        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id))
+        select(Node).where(and_(Node.space_id == space_id, Node.node_type == 'folder', Node.id == folder_id, Node.deleted == False))
     )
     root_folder = result.scalar_one_or_none()
     if not root_folder:

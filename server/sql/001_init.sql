@@ -16,12 +16,16 @@ CREATE TABLE IF NOT EXISTS nodes (
     config_id VARCHAR(100) COMMENT '配置唯一标识（仅config类型有值）',
     component_type VARCHAR(50) DEFAULT 'others' COMMENT '组件类型',
     created_by VARCHAR(100) COMMENT '创建人',
+    deleted BOOLEAN DEFAULT FALSE COMMENT '是否已删除',
+    deleted_at DATETIME COMMENT '删除时间',
+    deleted_by VARCHAR(100) COMMENT '删除人',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX idx_space_id (space_id),
     INDEX idx_parent_id (parent_id),
     INDEX idx_config_id (config_id),
     INDEX idx_node_type (node_type),
+    INDEX idx_deleted (deleted),
     FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点表（文件夹和配置统一存储）';
 
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE TABLE IF NOT EXISTS config_store (
     config_id VARCHAR(100) PRIMARY KEY COMMENT '配置唯一标识',
     content JSON NOT NULL COMMENT '配置内容（JSON格式）',
+    deleted BOOLEAN DEFAULT FALSE COMMENT '是否已删除',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配置内容存储表';
