@@ -1,53 +1,63 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import { viteMockServe } from 'vite-plugin-mock'
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => ({
-  // 资源基础路径
-  base: '/workbench/',
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const useMock = env.VITE_USE_MOCK !== 'false'
 
-  plugins: [
-    vue(),
+  return {
+    // 资源基础路径
+    base: '/workbench/',
 
-    // ── Mock 插件（仅开发模式启用，生产构建自动跳过） ──
-    viteMockServe({
-      mockPath: 'mock',            // mock 文件目录
-      enable: command === 'serve', // 仅 dev server 启用
-      logger: true,                // 控制台打印命中的 mock 接口
-    }),
-  ],
+    plugins: [
+      vue(),
 
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
-  },
+      // ── Mock 插件（仅开发模式 + VITE_USE_MOCK=true 时启用） ──
+      viteMockServe({
+        mockPath: 'mock',
+        enable: command === 'serve' && useMock,
+        logger: true,
+      }),
+    ],
 
-  css: {
-    preprocessorOptions: {
-      less: {
-        javascriptEnabled: true,
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
       },
     },
-  },
 
-  server: {
-    // Workbench 开发端口
-    port: 5577,
-    // 代理配置（后续对接 Server 时使用）
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
+    css: {
+      preprocessorOptions: {
+        less: {
+          javascriptEnabled: true,
+        },
       },
     },
-    cors: true,
-  },
 
-  build: {
-    outDir: 'dist',
-    sourcemap: false,
-  },
-}))
+    server: {
+      // Workbench 开发端口
+      port: 5577,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+        },
+        // ── 对接 Server 时：将 /workbench/api 代理到后端 ──
+        '/workbench/api': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          rewrite: (path) => '/api' + path,
+        },
+      },
+      cors: true,
+    },
+
+    build: {
+      outDir: 'dist',
+      sourcemap: false,
+    },
+  }
+})

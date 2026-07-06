@@ -1,0 +1,6 @@
+ALTER TABLE nodes ADD COLUMN deleted BOOLEAN DEFAULT FALSE COMMENT '是否已删除';
+ALTER TABLE nodes ADD COLUMN deleted_at DATETIME COMMENT '删除时间';
+ALTER TABLE nodes ADD COLUMN deleted_by VARCHAR(100) COMMENT '删除人';
+ALTER TABLE nodes ADD INDEX idx_deleted (deleted);
+
+ALTER TABLE config_store ADD COLUMN deleted BOOLEAN DEFAULT FALSE COMMENT '是否已删除';
