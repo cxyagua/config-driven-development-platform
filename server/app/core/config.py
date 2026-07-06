@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     DATABASE_URL: str = ""
 
+    DEFAULT_USER_ID: str = "admin"
+    DEFAULT_USER_NAME: str = "管理员"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
