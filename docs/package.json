@@ -1,0 +1,17 @@
+{
+  "name": "cddp-docs",
+  "version": "0.1.0",
+  "description": "CDDP 文档中心 — 配置驱动开发平台",
+  "author": "cxyagua",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.1",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}
