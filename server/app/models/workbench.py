@@ -48,4 +48,5 @@ class ConfigHistory(Base):
     config_id = Column(String(100), nullable=False, comment="配置唯一标识")
     content = Column(JSON, nullable=False, comment="配置内容快照")
     version = Column(Integer, nullable=False, comment="版本号")
+    change_type = Column(Enum("create", "modify", "sync"), nullable=False, default="modify", comment="变更类型：create-新增/modify-修改/sync-同步")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")

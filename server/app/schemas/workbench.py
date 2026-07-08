@@ -76,6 +76,7 @@ class ConfigHistoryItem(BaseModel):
     configId: str
     content: Any
     version: int
+    changeType: Optional[str] = None
     createdAt: Optional[str] = None
 
 

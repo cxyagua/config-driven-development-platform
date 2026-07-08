@@ -262,10 +262,20 @@ async def create_config(db: AsyncSession, space_id: str, config_id: str, name: s
     tpl_key = component_type if component_type in CONFIG_TEMPLATES else 'others'
     tpl = CONFIG_TEMPLATES[tpl_key]
     if tpl and isinstance(tpl, dict) and 'id' in tpl:
-        config_store = ConfigStore(config_id=config_id, content={**tpl, 'id': config_id, 'name': name})
+        initial_content = {**tpl, 'id': config_id, 'name': name}
+        config_store = ConfigStore(config_id=config_id, content=initial_content)
     else:
-        config_store = ConfigStore(config_id=config_id, content={})
+        initial_content = {}
+        config_store = ConfigStore(config_id=config_id, content=initial_content)
     db.add(config_store)
+
+    history = ConfigHistory(
+        config_id=config_id,
+        content=initial_content,
+        version=1,
+        change_type='create',
+    )
+    db.add(history)
 
     await db.commit()
 
@@ -365,6 +375,7 @@ async def save_config_content(db: AsyncSession, config_id: str, content: Any) ->
         config_id=config_id,
         content=stored.content,
         version=new_version,
+        change_type='modify',
     )
     db.add(history)
 
@@ -390,6 +401,7 @@ async def get_config_history(db: AsyncSession, config_id: str) -> Tuple[Optional
             'configId': h.config_id,
             'content': h.content,
             'version': h.version,
+            'changeType': h.change_type,
             'createdAt': h.created_at.strftime('%Y-%m-%d %H:%M:%S') if h.created_at else None,
         }
         for h in histories
@@ -421,6 +433,7 @@ async def rollback_config(db: AsyncSession, config_id: str, version: int) -> Tup
         config_id=config_id,
         content=stored.content,
         version=new_version,
+        change_type='modify',
     )
     db.add(backup)
 
@@ -562,6 +575,14 @@ async def sync_folder(db: AsyncSession, space_id: str, folder_id: int, target_sp
             tgt_stored = result.scalar_one_or_none()
             if not tgt_stored:
                 db.add(ConfigStore(config_id=config.config_id, content=stored.content))
+                result = await db.execute(select(func.max(ConfigHistory.version)).where(ConfigHistory.config_id == config.config_id))
+                max_ver = result.scalar_one_or_none()
+                db.add(ConfigHistory(
+                    config_id=config.config_id,
+                    content=stored.content,
+                    version=(max_ver or 0) + 1,
+                    change_type='sync',
+                ))
 
     await db.commit()
     return True, None
@@ -617,6 +638,14 @@ async def sync_config(db: AsyncSession, config_id: str, target_space_id: str) ->
         tgt_stored = result.scalar_one_or_none()
         if not tgt_stored:
             db.add(ConfigStore(config_id=config_id, content=stored.content))
+            result = await db.execute(select(func.max(ConfigHistory.version)).where(ConfigHistory.config_id == config_id))
+            max_ver = result.scalar_one_or_none()
+            db.add(ConfigHistory(
+                config_id=config_id,
+                content=stored.content,
+                version=(max_ver or 0) + 1,
+                change_type='sync',
+            ))
 
     await db.commit()
     return True, None
