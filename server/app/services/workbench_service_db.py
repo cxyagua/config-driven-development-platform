@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select, delete, update, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.workbench import Space, Node, ConfigStore
+from app.models.workbench import Space, Node, ConfigStore, ConfigHistory
 from app.schemas.workbench import Node as NodeSchema
 from app.core.config import settings
 
@@ -356,6 +356,17 @@ async def save_config_content(db: AsyncSession, config_id: str, content: Any) ->
     owner_space = await find_space_id_by_config_id(db, config_id)
     if owner_space and await is_space_readonly(db, owner_space):
         return False, '只读空间，禁止操作'
+
+    result = await db.execute(select(func.max(ConfigHistory.version)).where(ConfigHistory.config_id == config_id))
+    max_version = result.scalar_one_or_none()
+    new_version = (max_version or 0) + 1
+
+    history = ConfigHistory(
+        config_id=config_id,
+        content=stored.content,
+        version=new_version,
+    )
+    db.add(history)
 
     stored.content = content
     await db.commit()

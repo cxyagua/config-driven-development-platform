@@ -39,3 +39,13 @@ class ConfigStore(Base):
     deleted = Column(Boolean, default=False, comment="是否已删除")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
+
+
+class ConfigHistory(Base):
+    __tablename__ = "config_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="历史记录ID")
+    config_id = Column(String(100), nullable=False, comment="配置唯一标识")
+    content = Column(JSON, nullable=False, comment="配置内容快照")
+    version = Column(Integer, nullable=False, comment="版本号")
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
