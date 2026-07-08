@@ -71,6 +71,18 @@ class UpdateConfigTypeRequest(BaseModel):
     componentType: str
 
 
+class ConfigHistoryItem(BaseModel):
+    id: int
+    configId: str
+    content: Any
+    version: int
+    createdAt: Optional[str] = None
+
+
+class RollbackConfigRequest(BaseModel):
+    version: int
+
+
 class ApiResponse(BaseModel):
     code: int = 0
     message: str = "ok"

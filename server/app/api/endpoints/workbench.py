@@ -6,13 +6,13 @@ from app.schemas.workbench import (
     ApiResponse, CreateFolderRequest, RenameFolderRequest,
     DeleteFolderRequest, MoveFolderRequest, SyncFolderRequest,
     CreateConfigRequest, RenameConfigRequest, MoveConfigRequest,
-    SyncConfigRequest, UpdateConfigTypeRequest,
+    SyncConfigRequest, UpdateConfigTypeRequest, RollbackConfigRequest,
 )
 from app.services.workbench_service_db import (
     get_spaces, get_nodes, build_tree, create_folder, rename_folder,
     delete_folder, move_folder, sync_folder, create_config, rename_config,
     delete_config, move_config, get_config_content, save_config_content,
-    update_config_type, sync_config,
+    update_config_type, sync_config, get_config_history, rollback_config,
 )
 
 router = APIRouter(prefix="/workbench", tags=["Workbench"])
@@ -153,6 +153,28 @@ async def _get_config_content(config_id: str, db: AsyncSession = Depends(get_db)
 @router.put("/api/configs/{config_id}/content")
 async def _save_config_content(config_id: str, content: Any = Body(...), db: AsyncSession = Depends(get_db)) -> ApiResponse:
     success, error = await save_config_content(db, config_id, content)
+    if error:
+        if '不存在' in error:
+            return ApiResponse(code=404, message=error)
+        if '只读' in error:
+            return ApiResponse(code=403, message=error)
+        return ApiResponse(code=400, message=error)
+    return ApiResponse(data=None)
+
+
+@router.get("/api/configs/{config_id}/history")
+async def _get_config_history(config_id: str, db: AsyncSession = Depends(get_db)) -> ApiResponse:
+    data, error = await get_config_history(db, config_id)
+    if error:
+        if '不存在' in error:
+            return ApiResponse(code=404, message=error)
+        return ApiResponse(code=400, message=error)
+    return ApiResponse(data=data)
+
+
+@router.post("/api/configs/{config_id}/rollback")
+async def _rollback_config(config_id: str, req: RollbackConfigRequest = Body(...), db: AsyncSession = Depends(get_db)) -> ApiResponse:
+    success, error = await rollback_config(db, config_id, req.version)
     if error:
         if '不存在' in error:
             return ApiResponse(code=404, message=error)

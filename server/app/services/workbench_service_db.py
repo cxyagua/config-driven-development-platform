@@ -373,6 +373,62 @@ async def save_config_content(db: AsyncSession, config_id: str, content: Any) ->
     return True, None
 
 
+async def get_config_history(db: AsyncSession, config_id: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    result = await db.execute(select(ConfigStore).where(and_(ConfigStore.config_id == config_id, ConfigStore.deleted == False)))
+    stored = result.scalar_one_or_none()
+    if not stored:
+        return None, f'配置 "{config_id}" 不存在'
+
+    result = await db.execute(
+        select(ConfigHistory).where(ConfigHistory.config_id == config_id).order_by(ConfigHistory.version.desc())
+    )
+    histories = result.scalars().all()
+
+    return [
+        {
+            'id': h.id,
+            'configId': h.config_id,
+            'content': h.content,
+            'version': h.version,
+            'createdAt': h.created_at.strftime('%Y-%m-%d %H:%M:%S') if h.created_at else None,
+        }
+        for h in histories
+    ], None
+
+
+async def rollback_config(db: AsyncSession, config_id: str, version: int) -> Tuple[bool, Optional[str]]:
+    result = await db.execute(select(ConfigStore).where(and_(ConfigStore.config_id == config_id, ConfigStore.deleted == False)))
+    stored = result.scalar_one_or_none()
+    if not stored:
+        return False, f'配置 "{config_id}" 不存在'
+
+    owner_space = await find_space_id_by_config_id(db, config_id)
+    if owner_space and await is_space_readonly(db, owner_space):
+        return False, '只读空间，禁止操作'
+
+    result = await db.execute(
+        select(ConfigHistory).where(and_(ConfigHistory.config_id == config_id, ConfigHistory.version == version))
+    )
+    history = result.scalar_one_or_none()
+    if not history:
+        return False, f'版本 "{version}" 不存在'
+
+    result = await db.execute(select(func.max(ConfigHistory.version)).where(ConfigHistory.config_id == config_id))
+    max_version = result.scalar_one_or_none()
+    new_version = (max_version or 0) + 1
+
+    backup = ConfigHistory(
+        config_id=config_id,
+        content=stored.content,
+        version=new_version,
+    )
+    db.add(backup)
+
+    stored.content = history.content
+    await db.commit()
+    return True, None
+
+
 async def update_config_type(db: AsyncSession, config_id: str, component_type: str) -> Tuple[Optional[List[NodeSchema]], Optional[str]]:
     if not component_type:
         return None, 'componentType 不能为空'
